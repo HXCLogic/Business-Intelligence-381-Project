@@ -1,0 +1,323 @@
+---
+title: "BIN381_Project_MODELLING"
+author: "Group F"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Load Libraries
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(caTools)
+library(randomForest)
+```
+
+# Load the dataset
+
+```{r}
+#Read the dataset into object "custData"
+custData <- read.csv("CustData2_Prepared.csv")
+custData$Eligible <- as.factor(custData$Eligible)
+```
+
+# Split the dataset into training data and testing data
+
+```{r}
+#Split the dataset to 80% training data and 20% testing data
+set.seed(123)
+train_index <- createDataPartition(custData$Eligible, p = 0.8, list = FALSE)
+train_data <- custData[train_index, ]
+test_data <- custData[-train_index, ]
+```
+
+# Logistic Regression
+
+## Build/train Logistic Regression Model
+
+```{r}
+logisticRegressionModel <- glm(formula = Eligible~ . -Annual_Salary,
+                               data = train_data,family = 'binomial')
+```
+
+## Make Predictions using the model
+
+```{r}
+logisticRegressionPrediction <- predict(logisticRegressionModel,
+                                        newdata = test_data, type ='response')
+head(logisticRegressionPrediction)
+logisticRegressionY_pred = ifelse(logisticRegressionPrediction >0.5, 1, 0)
+```
+
+## Confusion matrix
+
+### Create confusion matrix
+
+```{r}
+logisticRegression_matrix <- table(actual = test_data$Eligible,
+                                   predicted = logisticRegressionY_pred)
+logisticRegression_matrix
+```
+
+### Extract TP, TN, FP and FN from confusion matrix
+
+```{r}
+# Extract TruePositive, TrueNegative, FalsePositive 
+# and FalseNegative for confusion matrix
+logisticRegression_truePositive <- logisticRegression_matrix[1, 1]
+logisticRegression_trueNegative <- logisticRegression_matrix[2, 2]
+logisticRegression_falsePositive <- logisticRegression_matrix[1, 2]
+logisticRegression_falseNegative <- logisticRegression_matrix[2, 1]
+```
+
+## Calculate evaluation metrics
+
+```{r}
+# Calculate Evaluation Metrics
+logisticRegression_accuracy <- 
+  round(((sum(diag(logisticRegression_matrix)) / 
+            sum(logisticRegression_matrix))) * 100, 2)
+logisticRegression_precision <- 
+  round((logisticRegression_truePositive /
+           (logisticRegression_truePositive +
+              logisticRegression_falsePositive)) * 100, 2)
+logisticRegression_recall <- 
+  round((logisticRegression_truePositive /
+           (logisticRegression_truePositive +
+              logisticRegression_falseNegative)) * 100, 2)
+logisticRegression_f1_score <- 
+  round(2 * (logisticRegression_precision * logisticRegression_recall) /
+          (logisticRegression_precision + logisticRegression_recall), 2)
+```
+
+# Decision Tree
+
+## Build/train Decision Tree Model Model
+
+```{r buildDecTree}
+#Build Decision Tree Model
+decisionTreeModel <- rpart(Eligible ~ . -Annual_Salary,
+                           data = train_data, method = 'class')
+```
+
+## Visualize the model
+
+```{r decisionTreePlot, echo=FALSE}
+# Visualize the model
+rpart.plot(decisionTreeModel, type = 3, extra = 101,
+                            under = TRUE, fallen.leaves = TRUE)
+```
+
+## Make Predictions using the model
+
+```{r}
+# Make predictions on the test data
+decisionTreePredictions <- predict(decisionTreeModel,
+                                   newdata = test_data, type = 'class')
+```
+
+## Confusion matrix
+
+### Create confusion matrix
+
+```{r}
+#Confusion matrix
+decisionTreeMatrix <- table(test_data$Eligible,
+                            decisionTreePredictions)
+print(decisionTreeMatrix)
+```
+
+### Extract TP, TN, FP and FN from confusion matrix
+
+```{r}
+# Extract TruePositive, TrueNegative, FalsePositive 
+# and FalseNegative for confusion matrix
+decisionTreeTruePositive <- decisionTreeMatrix[1, 1]
+decisionTreeTrueNegative <- decisionTreeMatrix[2, 2]
+decisionTreeFalsePositive <- decisionTreeMatrix[1, 2]
+decisionTreeFalseNegative <- decisionTreeMatrix[2, 1]
+```
+
+## Claculate evaluation metrics
+
+```{r}
+#Calculate Evaluation Metrics
+decisionTreeAccuracy <- 
+  round((sum(diag(decisionTreeMatrix)) / sum(decisionTreeMatrix)) * 100, 2)
+decisionTreePrecision <- 
+  round((decisionTreeTruePositive /
+           (decisionTreeTruePositive + decisionTreeFalsePositive)) * 100, 2)
+decisionTreeRecall <- 
+  round((decisionTreeTruePositive / (decisionTreeTruePositive +
+                                       decisionTreeFalseNegative)) * 100, 2)
+decisionTreeF1Score <- 
+  round(2 * (decisionTreePrecision * decisionTreeRecall) /
+                            (decisionTreePrecision + decisionTreeRecall), 2)
+```
+
+# Random Forest
+
+## Build/train Random Forest Model Model
+
+```{r}
+#Build Random Forest Model
+randomForest_model <- randomForest(Eligible ~ . -Annual_Salary,
+                                   data = train_data, ntree = 100,
+                                   mtry = 3, importance = TRUE)
+```
+
+## Visualize attribute importance
+
+```{r}
+#The attribute importance can be visualised using the random forest model
+varImpPlot(randomForest_model)
+
+```
+
+## Make Predictions using the model
+
+```{r}
+#Make Predictions Using Random Forest
+randomForest_predictions <- predict(randomForest_model, newdata = test_data)
+```
+
+## Confusion matrix
+
+### Create confusion matrix
+
+```{r}
+#Matrix for Random Forest
+randomForest_cm <- confusionMatrix(as.factor(randomForest_predictions),
+                                   as.factor(test_data$Eligible))
+
+randomForest_matrix <- randomForest_cm$table
+randomForest_matrix
+```
+
+## Extract TP, TN, FP and FN from confusion matrix
+
+```{r}
+# Extract TruePositive, TrueNegative, FalsePositive 
+# and FalseNegative for confusion matrix
+randomForest_truePositive <- randomForest_matrix[1, 1]
+randomForest_trueNegative <- randomForest_matrix[2, 2]
+randomForest_falsePositive <- randomForest_matrix[1, 2]
+randomForest_falseNegative <- randomForest_matrix[2, 1]
+```
+
+## Calculate evaluation metrics
+
+```{r}
+#Calculate Evaluation Metrics
+randomForest_accuracy <- 
+  round((sum(diag(randomForest_matrix)) / sum(randomForest_matrix)) * 100, 2)
+randomForest_precision <- 
+  round((randomForest_truePositive / (randomForest_truePositive +
+                                        randomForest_falsePositive)) * 100, 2)
+randomForest_recall <- 
+  round((randomForest_truePositive / (randomForest_truePositive +
+                                        randomForest_falseNegative)) * 100, 2)
+randomForest_f1_score <- 
+  round(2 * (randomForest_precision * randomForest_recall) /
+                            (randomForest_precision + randomForest_recall), 2)
+
+```
+
+# Model Evaluation
+
+## Print evaluation metrics of Logistic Regression Model
+
+```{r}
+cat("Logistic Regression Accuracy:", logisticRegression_accuracy, "% \n")
+cat("Logistic Regression Precision:", logisticRegression_precision, "% \n")
+cat("Logistic Regression Recall:", logisticRegression_recall, "% \n")
+cat("Logistic Regression F1-score:", logisticRegression_f1_score, "% \n")
+```
+
+## Print evaluation metrics of Decision Tree Model
+
+```{r}
+cat("Decision Tree Accuracy:", decisionTreeAccuracy, "% \n")
+cat("Decision Tree Precision:", decisionTreePrecision, "% \n")
+cat("Decision Tree Recall:", decisionTreeRecall, "% \n")
+cat("Decision Tree F1-score:", decisionTreeF1Score, "% \n")
+```
+
+## Print evaluation metrics of Random Forest Model
+
+```{r}
+cat("Random Forest Accuracy:", randomForest_accuracy, "% \n")
+cat("Random Forest Precision:", randomForest_precision, "% \n")
+cat("Random Forest Recall:", randomForest_recall, "% \n")
+cat("Random Forest F1-score:", randomForest_f1_score, "% \n")
+```
+
+## Calculate Eligibility Rates - Logistic Regression
+
+```{r}
+# Assuming `predictions` is a vector of 1s (eligible) and 0s (not eligible) from your model
+# For example: predictions <- predict(model, newdata, type = "response") > 0.5
+ 
+# Count eligible customers
+num_eligible_customers <- sum(logisticRegressionY_pred == 1)
+
+# Total number of customers
+total_customers <- length(logisticRegressionY_pred)
+ 
+# Calculate the eligibility percentage
+eligibility_percentage <- (num_eligible_customers / total_customers) * 100
+ 
+cat("Percentage of eligible customers:", round(eligibility_percentage, 2), "%\n")
+```
+
+## Calculate Eligibility Rates - Decision Tree
+
+```{r}
+# Assuming `predictions` is a vector of 1s (eligible) and 0s (not eligible) from your model
+# For example: predictions <- predict(model, newdata, type = "response") > 0.5
+ 
+# Count eligible customers
+num_eligible_customers <- sum(decisionTreePredictions == 1)
+
+# Total number of customers
+total_customers <- length(decisionTreePredictions)
+ 
+# Calculate the eligibility percentage
+eligibility_percentage <- (num_eligible_customers / total_customers) * 100
+ 
+cat("Percentage of eligible customers:", round(eligibility_percentage, 2), "%\n")
+```
+
+## Calculate Eligibility Rates - Random Forest
+
+```{r}
+# Assuming `predictions` is a vector of 1s (eligible) and 0s (not eligible) from your model
+# For example: predictions <- predict(model, newdata, type = "response") > 0.5
+ 
+# Count eligible customers
+num_eligible_customers <- sum(randomForest_predictions == 1)
+
+# Total number of customers
+total_customers <- length(randomForest_predictions)
+ 
+# Calculate the eligibility percentage
+eligibility_percentage <- (num_eligible_customers / total_customers) * 100
+ 
+cat("Percentage of eligible customers:", round(eligibility_percentage, 2), "%\n")
+```
+
+# Save Models
+
+```{r saveModels}
+#Save the logistic regression model
+saveRDS(logisticRegressionModel, file = "logistic_regression_model.rds")
+
+#Save the decision tree model
+saveRDS(decisionTreeModel, file = "decision_tree_model.rds")
+
+#Save the random forest model
+saveRDS(randomForest_model, file = "random_forest_model.rds")
+```

@@ -1,0 +1,196 @@
+---
+title: "BIN381_Project_Milestone 1_Markdown"
+author: "Group F"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+## Data Quality
+
+```{r cars}
+
+# Read the dataset into the dataframe "customers"
+customers <- read.csv("CustData2.csv")
+
+
+# Missing Values
+sum(is.na(customers$Column1))
+sum(customers$Last.Name=="")
+sum(customers$First.Name=="")
+sum(customers$Middle.Initial=="")
+sum(customers$Title=="")
+sum(customers$Department.Name=="")
+sum(is.na(customers$Annual.Salary))
+sum(is.na(customers$Gross.Pay.Last.Paycheck))
+sum(is.na(customers$Gross.Year.To.Date))
+sum(is.na(customers$Gross.Year.To.Date...FRS.Contribution))
+sum(is.na(customers$year_of_birth))
+sum(customers$marital_status=="")
+sum(customers$street_address=="")
+sum(is.na(customers$postal_code))
+sum(customers$city=="")
+sum(customers$State=="")
+sum(customers$Province=="")
+sum(is.na(customers$Country_id))
+sum(customers$phone_number=="")
+sum(customers$email=="")
+sum(customers$Education=="")
+sum(customers$Occupation=="")
+sum(is.na(customers$household_size))
+sum(is.na(customers$yrs_residence))
+
+
+# Identify duplicate rows / records and insert into the dataframe "duplicated_rows"
+duplicated_rows <- customers[duplicated(customers), ]
+# Display "duplicated_rows" and all its records
+print(duplicated_rows)
+# Count the number of duplicate rows
+sum(duplicated_rows)
+
+
+# Outliers shown in box plot of the "Annual.Salary"
+boxplot(customers$Annual.Salary)
+
+
+# Variable Type Validation
+str(customers)
+
+
+# Data Distribution
+hist(customers$Annual.Salary)
+
+
+# Unique records within attributes that contain "characters"
+length(unique(customers$Last.Name))
+length(unique(customers$First.Name))
+length(unique(customers$Middle.Initial))
+length(unique(customers$Title))
+length(unique(customers$Department.Name))
+length(unique(customers$marital_status))
+length(unique(customers$street_address))
+length(unique(customers$city))
+length(unique(customers$State))
+length(unique(customers$Province))
+length(unique(customers$phone_number))
+length(unique(customers$email))
+length(unique(customers$Education))
+length(unique(customers$Occupation))
+
+
+# Display the unique values of each attribute
+unique(customers$Department.Name)
+unique(customers$marital_status)
+unique(customers$Province)
+unique(customers$Education)
+unique(customers$Occupation)
+```
+
+## Data Visualisation
+
+
+```{r}
+library(ggplot2)
+library(reshape2)
+library(corrplot)
+
+custData <- read.csv('CustData2.csv')
+
+str(custData)
+#These columns are numeric:
+numericColumns <- custData[,sapply(custData, is.numeric)]
+################################################
+#Correlation Matrix:
+corMatrix <- cor(numericColumns, use = 'complete.obs')
+corrplot(corMatrix, method = 'color', tl.col = 'black', tl.cex = 0.8)
+
+################################################
+#Pair Plots:
+
+library(GGally)
+library(ggplot2)
+
+selectedData <- custData[, c("Annual.Salary", "year_of_birth", "Gross.Year.To.Date...FRS.Contribution", "Gross.Year.To.Date")]
+
+ggpairs(selectedData, 
+        title = "Pair Plots:",
+        lower = list(continuous = "smooth"), 
+        diag = list(continuous = "densityDiag"))
+
+###############################################
+#Boxplots
+
+library(ggplot2)
+library(scales)
+
+ggplot(custData, aes(x = Department.Name, y = Annual.Salary)) +
+  geom_boxplot(fill = 'skyblue', outlier.colour = 'red', outlier.shape = 16, notch = TRUE) +
+  labs(title = "Boxplot for Annual Salary by Department", x = 'Department Name', y = 'Annual Salary') +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+
+###############################################
+#Scatter Plots
+
+library(ggplot2)
+library(scales)
+
+# Scatter plot for Annual Salary vs Gross Pay Last Paycheck
+ggplot(custData, aes(x = Gross.Pay.Last.Paycheck, y = Annual.Salary)) +
+  geom_point(color = "skyblue", size = 3, alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Scatter Plot: Annual Salary vs Gross Pay Last Paycheck", 
+       x = "Gross Pay Last Paycheck", 
+       y = "Annual Salary") +
+  scale_y_continuous(labels = comma) + 
+  theme_minimal()
+
+library(ggplot2)
+library(scales)
+# Scatter plot for Annual Salary vs Gross Year to Date
+ggplot(custData, aes(x = Gross.Year.To.Date, y = Annual.Salary)) +
+  geom_point(color = "skyblue", size = 3, alpha = 0.6) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Scatter Plot: Annual Salary vs Gross Year to Date", 
+       x = "Gross Year to Date", 
+       y = "Annual Salary") +
+  scale_y_continuous(labels = comma) +  
+  theme_minimal()
+
+
+################################################
+#Histogram
+
+#Histogram for Frequency of Annual Salary
+ggplot(custData, aes(x = Annual.Salary)) +
+  geom_histogram(binwidth = 5000, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Annual Salary", 
+       x = "Annual Salary", 
+       y = "Frequency") +
+  theme_minimal()
+
+#Histogram for Distribution of Birth Years
+ggplot(custData, aes(x = year_of_birth)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Birth Years", 
+       x = "Years of Birth", 
+       y = "Frequency") +
+  theme_minimal()
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+
+
+```
+
+.
