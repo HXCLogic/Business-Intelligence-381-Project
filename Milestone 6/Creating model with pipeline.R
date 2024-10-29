@@ -11,13 +11,31 @@ Mode <- function(x) {
 }
 
 # Read 'CustData2.csv' file into data frame 'customers'
-customers <- read.csv("CustData2.csv")
+custData <- read.csv("CustData2.csv")
+
+# Calculate frequency tables with column names aligned to match new_record
+title_frequency <- table(custData$Title)
+department_frequency <- table(custData$Department.Name)
+custData$Country_id <- as.character(custData$Country_id)
+country_frequency <- table(custData$Country_id)
+
+# Write the frequency encoded values to csv files for use in the predictions
+write.csv(data.frame(title_frequency = title_frequency), "title_frequency.csv", row.names = FALSE)
+write.csv(data.frame(department_frequency = department_frequency), "department_frequency.csv", row.names = FALSE)
+write.csv(data.frame(country_frequency = country_frequency), "country_frequency.csv", row.names = FALSE)
 
 # Define preprocessing pipeline function
-create_preprocessing_pipeline <- function(data) {
-  # Step 1: Feature Engineering
+create_preprocessing_pipeline <- function(data, title_freq, dept_freq, country_freq) {
+  # Feature Engineering
   data$Age <- as.integer(year(today()) - data$year_of_birth)
   data$Eligible <- ifelse(data$Annual.Salary > 50000, 1, 0)
+  
+  ## Calculate % eligible of baseline
+  
+  numEligibleOriginal <- sum(data$Eligible == 1, na.rm = TRUE)
+  totalCustomersOriginal <- length(data$Eligible)
+  eligiblePercantageOriginal <- (numEligibleOriginal / totalCustomersOriginal) * 100
+  cat("Percentage of Eligible Customers in baseline model: ", round(eligiblePercantageOriginal, 2))
   
   # Remove unnecessary columns
   keepColumns <- c("Title", "Department.Name", "Annual.Salary", 
@@ -40,17 +58,17 @@ create_preprocessing_pipeline <- function(data) {
     Mode(data$marital_status)
   
   # Remove empty cells for all columns/attributes
-  customers <- customers[!(is.na(customers$Title) | customers$Title == "" |
-                             is.na(customers$Department.Name)  |
-                             customers$Department.Name == ""  |
-                             is.na(customers$Annual.Salary)  |
-                             customers$Annual.Salary == ""  |
-                             is.na(customers$Gross.Pay.Last.Paycheck)  |
-                             customers$Gross.Pay.Last.Paycheck == ""  |
-                             is.na(customers$Gross.Year.To.Date)  |
-                             customers$Gross.Year.To.Date == ""  |
-                             is.na(customers$Gross.Year.To.Date...FRS.Contribution)  |
-                             customers$Gross.Year.To.Date...FRS.Contribution == ""), ]
+  data <- data[!(is.na(data$Title) | data$Title == "" |
+                             is.na(data$Department.Name)  |
+                             data$Department.Name == ""  |
+                             is.na(data$Annual.Salary)  |
+                             data$Annual.Salary == ""  |
+                             is.na(data$Gross.Pay.Last.Paycheck)  |
+                             data$Gross.Pay.Last.Paycheck == ""  |
+                             is.na(data$Gross.Year.To.Date)  |
+                             data$Gross.Year.To.Date == ""  |
+                             is.na(data$Gross.Year.To.Date...FRS.Contribution)  |
+                             data$Gross.Year.To.Date...FRS.Contribution == ""), ]
   
   # Step 3: Outlier Treatment
   cap_outliers <- function(column) {
@@ -64,11 +82,28 @@ create_preprocessing_pipeline <- function(data) {
                 "Gross.Year.To.Date", "Gross.Year.To.Date...FRS.Contribution")
   data[num_vars] <- lapply(data[num_vars], cap_outliers)
   
-  # Step 4: Encoding and Scaling
-  # Convert categorical variables
-  data$Marital_Status <- factor(data$marital_status)
-  data$Education <- factor(data$Education)
-  data$Occupation <- factor(data$Occupation)
+  # Encoding (frequency encoding using pre-calculated tables)
+  data$Frequency_Title <- ifelse(data$Title %in% names(title_freq), title_freq[data$Title], 0)
+  data$Frequency_Department <- ifelse(data$Department.Name %in% names(dept_freq), dept_freq[data$Department.Name], 0)
+  data$Frequency_Country_ID <- ifelse(data$Country_id %in% names(country_freq), country_freq[data$Country_id], 0)
+  
+  # One-hot encode marital status
+  data$Marital_Status_married <- ifelse(data$marital_status == "married", 1, 0)
+  data$Marital_Status_single <- ifelse(data$marital_status == "single", 1, 0)
+  data$Marital_Status_divorced <- ifelse(data$marital_status == "divorced", 1, 0)
+  data$Marital_Status_widowed <- ifelse(data$marital_status == "widowed", 1, 0)
+
+  data$Education_Bach <- ifelse(data$Education == "Bach.", 1, 0)
+  data$Education_Masters <- ifelse(data$Education == "Masters", 1, 0)
+  data$Education_HS <- ifelse(data$Education == "HS-grad", 1, 0)
+
+  data$Occupation_Cleric <- ifelse(data$Occupation == "Cleric.", 1, 0)
+  data$Occupation_Prof <- ifelse(data$Occupation == "Prof.", 1, 0)
+  data$Occupation_Exec <- ifelse(data$Occupation == "Exec.", 1, 0)
+  data$Occupation_Sales <- ifelse(data$Occupation == "Sales", 1, 0)
+  
+  # data <- data %>% select(-year_of_birth,-marital_status, -Education, -Occupation)
+  data <- data %>% select(-Title, -Department.Name, -Country_id, -marital_status, -Education, -Occupation)
   
   # Create preprocessing pipeline
   preprocess_pipeline <- preProcess(data, method = c("center", "scale", "BoxCox"))
@@ -77,11 +112,14 @@ create_preprocessing_pipeline <- function(data) {
 }
 
 # Apply preprocessing pipeline
-processed_data <- create_preprocessing_pipeline(customers)
+processed_data <- create_preprocessing_pipeline(custData, title_frequency, department_frequency, country_frequency)
 custData <- predict(processed_data$pipeline, newdata = processed_data$data)
+
+str(custData)
 
 # Ensure there are no missing values in the target variable 'Eligible'
 custData <- custData[!is.na(custData$Eligible), ]
+custData$Eligible <- as.factor(custData$Eligible)
 
 # Split data into training and testing sets
 set.seed(123)
@@ -89,24 +127,84 @@ train_index <- createDataPartition(custData$Eligible, p = 0.8, list = FALSE)
 train_data <- custData[train_index, ]
 test_data <- custData[-train_index, ]
 
+# Check for missing values in train_data
+missing_summary <- sapply(train_data, function(x) sum(is.na(x)))
+print(missing_summary)
+
+# Remove rows with missing values in train_data
+train_data <- na.omit(train_data)
+
+str(train_data)
+
 # Train Random Forest Model using pipeline
 train_data$Eligible <- as.factor(train_data$Eligible)
-randomForest_model <- randomForest(Eligible ~ ., data = train_data, ntree = 100, 
+randomForest_model <- randomForest(Eligible ~ . -Annual.Salary, data = train_data, ntree = 100, 
                                    mtry = 3, importance = TRUE)
 
+str(test_data)
+
 # Predictions using the pipeline for new data
-test_data_processed <- predict(processed_data$pipeline, newdata = test_data)
-randomForest_predictions <- predict(randomForest_model, newdata = test_data_processed)
+# test_data_processed <- predict(processed_data$pipeline, newdata = test_data)
+randomForest_predictions <- predict(randomForest_model, newdata = test_data)#_processed)
 
 # Ensure both prediction and actual values have the same levels
-randomForest_predictions <- as.factor(randomForest_predictions)
-test_data_processed$Eligible <- as.factor(test_data_processed$Eligible)
+# randomForest_predictions <- as.factor(randomForest_predictions)
+# test_data_processed$Eligible <- as.factor(test_data_processed$Eligible)
 
 # Check and adjust levels if necessary
-levels(randomForest_predictions) <- levels(test_data_processed$Eligible)
+# levels(randomForest_predictions) <- levels(test_data_processed$Eligible)
+
+# Convert predictions and actual values to factors with the same levels
+# randomForest_predictions <- factor(randomForest_predictions, levels = c("0", "1"))
+# test_data_processed$Eligible <- factor(test_data_processed$Eligible, levels = c("0", "1"))
 
 # Confusion Matrix for Random Forest
-confusionMatrix(randomForest_predictions, as.factor(test_data_processed$Eligible))
+levels(randomForest_predictions)
+# levels(as.factor(test_data_processed$Eligible))
+# test_data_processed$Eligible
+randomForest_cm <- confusionMatrix(as.factor(randomForest_predictions), as.factor(test_data$Eligible))#_processed$Eligible))
+randomForest_matrix <- randomForest_cm$table
+
+randomForest_matrix
+
+# Extract TruePositive, TrueNegative, FalsePositive 
+# and FalseNegative for confusion matrix
+randomForest_truePositive <- randomForest_matrix[1, 1]
+randomForest_trueNegative <- randomForest_matrix[2, 2]
+randomForest_falsePositive <- randomForest_matrix[1, 2]
+randomForest_falseNegative <- randomForest_matrix[2, 1]
+
+# Calculate Evaluation Metrics
+randomForest_accuracy <- 
+  round(((sum(diag(randomForest_matrix)) / sum(randomForest_matrix))) * 100, 2)
+randomForest_precision <- 
+  round((randomForest_truePositive / (randomForest_truePositive +
+                                        randomForest_falsePositive)) * 100, 2)
+randomForest_recall <- 
+  round((randomForest_truePositive / (randomForest_truePositive +
+                                        randomForest_falseNegative)) * 100, 2)
+randomForest_f1_score <- 
+  round(2 * (randomForest_precision * randomForest_recall) /
+          (randomForest_precision + randomForest_recall), 2)
+
+cat("Random Forest Accuracy:", randomForest_accuracy, "% \n")
+cat("Random Forest Precision:", randomForest_precision, "% \n")
+cat("Random Forest Recall:", randomForest_recall, "% \n")
+cat("Random Forest F1-score:", randomForest_f1_score, "% \n")
+
+# Assuming `predictions` is a vector of 1s (eligible) and 0s (not eligible) from your model
+# For example: predictions <- predict(model, newdata, type = "response") > 0.5
+
+# Count eligible customers
+num_eligible_customers <- sum(randomForest_predictions == 0.743001202264081)
+
+# Total number of customers
+total_customers <- length(randomForest_predictions)
+
+# Calculate the eligibility percentage
+eligibility_percentage <- (num_eligible_customers / total_customers) * 100
+
+cat("Percentage of eligible customers:", round(eligibility_percentage, 2), "%\n")
 
 # Save the model and preprocessing pipeline
 saveRDS(randomForest_model, file = "random_forest_model.rds")
