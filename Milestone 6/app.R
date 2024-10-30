@@ -10,6 +10,11 @@ library(randomForest)
 random_forest_model <- readRDS("random_forest_model.rds")
 preprocessing_pipeline <- readRDS("preprocessing_pipeline.rds")
 
+importance_plot <- varImpPlot(random_forest_model)
+
+#Load the accuracy Metrics
+metrics <- read.csv("accuracy_metrics.csv")
+
 # Import frequency encoding attributes
 title_frequency <- read.csv("title_frequency.csv")
 department_frequency <- read.csv("department_frequency.csv")
@@ -23,37 +28,62 @@ ui <- fluidPage(
     tabPanel(
       "Customer Details",
       sidebarPanel(
+        width = 7, 
         tags$h3("Customer Details"),
-        textInput("txtTitle", "Title", "CORRECTIONAL OFFICER"),
-        textInput("txtDepartment", "Department", "CORRECTIONS & REHABILITATION"),
-        numericInput("txtAnnualSalary", "Annual Salary", value = 54619.76),
-        numericInput("txtGPLP", "Gross Pay Last Paycheck", value = 2501.62),
-        numericInput("txtGYTD", "Gross Year To Date", value = 48025.48),
-        numericInput("txtGYTDFRS", "Gross FRS Contribution", value = 46616.58),
-        dateInput("txtYearOfBirth", "Date Of Birth", value = Sys.Date(), format = "yyyy", startview = "year"),
-        selectInput("txtMaritalStatus", "Marital Status",
-                    list("Single" = "single", "Married" = "married", "Divorced" = "divorced", "Widowed" = "widowed")),
-        textInput("txtCountryID", "Country ID", ""),
-        selectInput("txtEducation", "Education",
-                    list("Bachelor's Degree" = "Bach.", "Masters" = "Masters", "High School" = "HS-grad")),
-        selectInput("txtOccupation", "Occupation",
-                    list("Cleric" = "Cleric.", "Professor" = "Prof.", "Executive" = "Exec.", "Sales" = "Sales")),
-        numericInput("txtHouseholdSize", "Household Size", value = 1),
-        numericInput("txtYearsInResidance", "Years In Residence", value = 0),
+        fluidRow(
+          column(6,
+                 textInput("txtTitle", "Title", "", placeholder = "Title"),
+                 textInput("txtDepartment", "Department", "", placeholder = "Department"),
+                 numericInput("txtAnnualSalary", "Annual Salary", value = 0,),
+                 numericInput("txtGPLP", "Gross Pay Last Paycheck", value = 0),
+                 numericInput("txtGYTD", "Gross Year To Date", value = 0),
+                 numericInput("txtGYTDFRS", "Gross FRS Contribution", value = 0),
+          ),
+          column(6,
+                 dateInput("txtYearOfBirth", "Date Of Birth", value = Sys.Date(), format = "yyyy", startview = "year"),
+                 selectInput("txtMaritalStatus", "Marital Status",
+                             list("Single" = "single", "Married" = "married", "Divorced" = "divorced", "Widowed" = "widowed")),
+                 textInput("txtCountryID", "Country ID", "", placeholder = "Country ID"),
+                 selectInput("txtEducation", "Education",
+                             list("Bachelor's Degree" = "Bach.", "Masters" = "Masters", "High School" = "HS-grad")),
+                 selectInput("txtOccupation", "Occupation",
+                             list("Cleric" = "Cleric.", "Professor" = "Prof.", "Executive" = "Exec.", "Sales" = "Sales")),
+                 numericInput("txtHouseholdSize", "Household Size", value = 0),
+                 numericInput("txtYearsInResidance", "Years In Residence", value = 0)
+          )
+        ),
         actionButton("submit", "Submit")
       ),
       mainPanel(
+        width = 4,
+        h1("Customer Eligibility"),
         textOutput("txtout")
       )
     ),
-    tabPanel("Navbar 2", "This panel is intentionally left blank"),
-    tabPanel("Navbar 3", "This panel is intentionally left blank")
+    tabPanel("Model Accuracy Metrics", 
+             h1("Model Accuracy Metrics"),
+             textOutput("txtAccuracy"),
+             textOutput("txtPrecision"),
+             textOutput("txtRecall"),
+             textOutput("txtF1"),
+             textOutput("txtOriginal"),
+             textOutput("txtImproved"),
+             textOutput("txtIncrease"),
+             h2("Feature Importance"),
+             plotOutput("txtPlot")
+             
+    ),
+    tabPanel("Development Team", 
+             h1("Development Team"),
+             h4("Jo-Anne van der Wath"),
+             h4("Henry Roux"),
+             h4("Armandre Erasmus"),
+             h4("Chaleigh Storm"))
   )
 )
 
 # Define server function
 server <- function(input, output) {
-  # Reactive function to preprocess the new record
   # Reactive function to preprocess the new record
   preprocessed_record <- reactive({
     req(input$submit)
@@ -128,8 +158,57 @@ server <- function(input, output) {
   output$txtout <- renderText({
     req(prediction())
     predVal <- ifelse(prediction() == "0.743001202264081", "Eligible", "Not Eligible")
-    paste("Predicted Eligibility:", predVal)
+    paste(predVal)
   })
+  
+  #Output accuracy
+  output$txtAccuracy <- renderText({
+    accuracy <- metrics$Accuracy
+    paste("Accuracy:", accuracy, "%")
+  })
+  
+  #Output precision
+  output$txtPrecision <- renderText({
+    precision <- metrics$Precision
+    paste("Precision:", precision, "%")
+  })
+  
+  #Output recall
+  output$txtRecall <- renderText({
+    recall <- metrics$Recall
+    paste("Recall:", recall, "%")
+  })
+  
+  #Output f1 score
+  output$txtF1 <- renderText({
+    f1 <- metrics$F1_Score
+    paste("F1 Score:", f1, "%")
+  })
+  
+  #Output original eligibility rate
+  output$txtOriginal <- renderText({
+    original <- round(metrics$original_eligibility_rate,2)
+    paste("Rate of Eligibility of Baseline Model:", original, "%")
+  })
+  
+  #Output improved eligibility rate
+  output$txtImproved <- renderText({
+    improved <- round(metrics$improved_eligibility_rate,2)
+    paste("Rate of Eligibility of Random Forest Model:", improved, "%")
+  })
+  
+  #Output increase in eligible customers
+  output$txtIncrease <- renderText({
+    increase <- round(metrics$improved_eligibility_rate - metrics$original_eligibility_rate,2)
+    paste("Increase in the Number of Eligible Customers:", increase, "%")
+  })
+  
+  #Output feature importance plot
+  output$txtPlot <- renderPlot({
+    importance_plot <- varImpPlot(random_forest_model)
+    paste(importance_plot)
+  })
+  
 }
 
 # Create Shiny app
