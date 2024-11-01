@@ -20,6 +20,17 @@ title_frequency <- read.csv("title_frequency.csv")
 department_frequency <- read.csv("department_frequency.csv")
 country_frequency <- read.csv("country_frequency.csv")
 
+append_new_record <- function(new_record) {
+  # Read existing records from CSV
+  existing_records <- read.csv("new_records.csv")
+  
+  # Append the new record to the existing records
+  updated_records <- rbind(existing_records, new_record)
+  
+  # Write updated records back to CSV
+  write.csv(updated_records, "new_records.csv", row.names = FALSE)
+}
+
 # Define UI
 ui <- fluidPage(
   theme = shinytheme("superhero"),
@@ -84,11 +95,7 @@ ui <- fluidPage(
 
 # Define server function
 server <- function(input, output) {
-  # Reactive function to preprocess the new record
-  preprocessed_record <- reactive({
-    req(input$submit)
-    
-    # Create new record from input values
+  get_record <- eventReactive(input$submit, {
     new_record <- data.frame(
       Title = input$txtTitle,
       Department.Name = input$txtDepartment,
@@ -104,6 +111,15 @@ server <- function(input, output) {
       household_size = input$txtHouseholdSize,
       yrs_residence = input$txtYearsInResidance
     )
+    return(new_record)
+  })
+  
+  # Reactive function to preprocess the new record
+  preprocessed_record <- reactive({
+    req(input$submit)
+    
+    # Create new record from input values
+    new_record <- get_record()
     
     # Calculate 'Age'
     new_record <- new_record %>%
@@ -159,6 +175,13 @@ server <- function(input, output) {
     req(prediction())
     predVal <- ifelse(prediction() == "0.743001202264081", "Eligible", "Not Eligible")
     paste(predVal)
+  })
+  
+  observeEvent(input$submit, {
+    new_record <- get_record()
+    predVal <- ifelse(prediction() == "0.743001202264081", "Eligible", "Not Eligible")
+    new_record$Eligible <- predVal
+    append_new_record(new_record)
   })
   
   #Output accuracy
