@@ -21,6 +21,8 @@ library(randomForest)
 # Load the saved model and preprocessing pipeline
 randomForest_model <- readRDS("random_forest_model.rds")
 preprocessing_pipeline <- readRDS("preprocessing_pipeline.rds")
+
+new_records_df <- read.csv("new_records.csv")
 ```
 
 ## Import frequency encoding attributes
@@ -71,6 +73,8 @@ new_record <- data.frame(
 #   household_size = 2,
 #   yrs_residence = 4
 # )
+
+record_to_save <- new_record
 ```
 
 # Cleaning and preprocessing
@@ -152,3 +156,14 @@ predVal <- ifelse(prediction == "0.743001202264081",
 print(prediction)
 print(predVal)
 ```
+
+# Save new record
+
+```{r}
+record_to_save$Eligible <- predVal
+
+new_records_df <- rbind(new_records_df, record_to_save)
+
+write.csv(new_records_df, "new_records.csv", row.names = FALSE)
+```
+
