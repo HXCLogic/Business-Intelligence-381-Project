@@ -34,6 +34,54 @@ append_new_record <- function(new_record) {
 # Define UI
 ui <- fluidPage(
   theme = shinytheme("superhero"),
+  tags$style(HTML("
+    /* Table background */
+    .dataTable { 
+      background-color: white !important;
+      color: black;
+    }
+    
+    /* Search box */
+    .dataTables_wrapper .dataTables_filter input {
+      background-color: white !important;
+      color: black;
+      border: 1px solid #ccc;
+    }
+    
+    /* Pagination buttons */
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+      background-color: white !important;
+      color: black !important;
+    }
+    
+    /* Pagination button on hover */
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+      background-color: #ddd !important;
+      color: black !important;
+    }
+    
+    /* Change the color of the 'Show entries' label and dropdown */
+    .dataTables_length label, .dataTables_length select {
+    color: white;
+    }
+
+    /* Change the color of the pagination information text */
+    .dataTables_info {
+    color: white;
+    }
+
+    /* Change the color of the pagination controls (Previous, Next, page numbers) */
+    .dataTables_paginate a,
+    .dataTables_paginate span {
+    color: white !important;
+    }
+
+    /* Change the color of the 'Search' label */
+    .dataTables_filter label {
+    color: white;
+    } 
+
+  ")),
   navbarPage(
     "LangaSat Service Eligibility Predictor",
     tabPanel(
@@ -43,6 +91,8 @@ ui <- fluidPage(
         tags$h3("Customer Details"),
         fluidRow(
           column(6,
+                 textInput("txtName", "First Name", "", placeholder = "First Name"),
+                 textInput("txtSurname", "Surname", "", placeholder = "Surname"),
                  textInput("txtTitle", "Title", "", placeholder = "Title"),
                  textInput("txtDepartment", "Department", "", placeholder = "Department"),
                  numericInput("txtAnnualSalary", "Annual Salary", value = 0,),
@@ -71,6 +121,12 @@ ui <- fluidPage(
         textOutput("txtout")
       )
     ),
+    tabPanel("Bulk Predictions", 
+             h1("Please Upload File for Prediction Analysis"),
+             fileInput("txtfile", "Please select a file for analysis"),
+             actionButton("bulkSubmit", "Submit"),
+             DT::dataTableOutput("table")
+    ),
     tabPanel("Model Accuracy Metrics", 
              h1("Model Accuracy Metrics"),
              textOutput("txtAccuracy"),
@@ -81,7 +137,12 @@ ui <- fluidPage(
              textOutput("txtImproved"),
              textOutput("txtIncrease"),
              h2("Feature Importance"),
-             plotOutput("txtPlot")
+             plotOutput("txtPlot"),
+             h2("New Records"),
+             textOutput("txtTotalNewRecords"),
+             textOutput("txtEligibleNewRecords"),
+             textOutput("txtNonEligibleNewRecords"),
+             textOutput("txtPercentageEligibleNewRecords"),
              
     ),
     tabPanel("Development Team", 
@@ -95,8 +156,11 @@ ui <- fluidPage(
 
 # Define server function
 server <- function(input, output) {
+  #Get the new record
   get_record <- eventReactive(input$submit, {
     new_record <- data.frame(
+      Last.Name = input$txtSurname, 
+      First.Name = input$txtName,
       Title = input$txtTitle,
       Department.Name = input$txtDepartment,
       Annual.Salary = input$txtAnnualSalary,
@@ -164,7 +228,79 @@ server <- function(input, output) {
     return(processed_record)
   })
   
+  ################################################################
+
+  # Process and predict for each row in the uploaded file
+  # Bulk processing function
+  bulk_preprocess_and_predict <- function(data) {
+    # Loop through each row in the uploaded CSV file
+    processed_data <- lapply(1:nrow(data), function(i) {
+      # Extract the i-th row as a new record
+      new_record <- data[i, ]
+      
+      # Preprocess the new record
+      preprocessed_record <- new_record %>%
+        mutate(
+          Age = as.integer(year(Sys.Date()) - new_record$year_of_birth),
+          Eligible = 1,
+          Frequency_Title = ifelse(new_record$Title %in% title_frequency$Title, title_frequency[new_record$Title], 0),
+          Frequency_Department = ifelse(new_record$Department.Name %in% department_frequency$Department, department_frequency[new_record$Department.Name], 0),
+          Frequency_Country_ID = ifelse(new_record$Country_id %in% country_frequency$Country, country_frequency[new_record$Country_id], 0),
+          Marital_Status_married = ifelse(new_record$marital_status == "married", 1, 0),
+          Marital_Status_single = ifelse(new_record$marital_status == "single", 1, 0),
+          Marital_Status_divorced = ifelse(new_record$marital_status == "divorced", 1, 0),
+          Marital_Status_widowed = ifelse(new_record$marital_status == "widowed", 1, 0),
+          Education_Bach = ifelse(new_record$Education == "Bach.", 1, 0),
+          Education_Masters = ifelse(new_record$Education == "Masters", 1, 0),
+          Education_HS = ifelse(new_record$Education == "HS-grad", 1, 0),
+          Occupation_Cleric = ifelse(new_record$Occupation == "Cleric.", 1, 0),
+          Occupation_Prof = ifelse(new_record$Occupation == "Prof.", 1, 0),
+          Occupation_Exec = ifelse(new_record$Occupation == "Exec.", 1, 0),
+          Occupation_Sales = ifelse(new_record$Occupation == "Sales", 1, 0)
+        ) %>%
+        mutate(across(where(is.numeric), ~ ifelse(. <= 0, 0.001, .))) %>%
+        select(all_of(names(preprocessing_pipeline$mean))) %>%
+        mutate(across(everything(), as.numeric))
+
+      # Apply the preprocessing pipeline
+      processed_record <- predict(preprocessing_pipeline, newdata = preprocessed_record)
+      
+      # Make the prediction
+      pred <- predict(random_forest_model, newdata = processed_record, type = "response")
+      predVal <- ifelse(pred == "0.743001202264081", "Eligible", "Not Eligible")
+      
+      # Add the prediction to the new record
+      new_record$Prediction <- predVal
+      
+      return(new_record)
+    })
+    
+    # Convert list back to data frame
+    processed_data <- do.call(rbind, processed_data)
+    return(processed_data)
+  }
   
+  # Reactive function for bulk predictions
+  input_file <- reactive({
+    req(input$bulkSubmit)
+    if (is.null(input$txtfile)) {
+      return(NULL)
+    }
+    # Read the uploaded CSV file
+    data <- read.csv(file = input$txtfile$datapath)
+    
+    # Process and predict for bulk data
+    bulk_predictions <- bulk_preprocess_and_predict(data)
+    return(bulk_predictions)
+  })
+  
+  # Display bulk predictions
+  output$table <- DT::renderDataTable({
+    req(input_file())
+    input_file()
+  })
+  
+  #################################################################
   # Reactive function to make the prediction
   prediction <- eventReactive(input$submit, {
     predict(random_forest_model, newdata = preprocessed_record(), type = "response")
@@ -224,6 +360,36 @@ server <- function(input, output) {
   output$txtIncrease <- renderText({
     increase <- round(metrics$improved_eligibility_rate - metrics$original_eligibility_rate,2)
     paste("Increase in the Number of Eligible Customers:", increase, "%")
+  })
+  
+  #Output total new records
+  output$txtTotalNewRecords <- renderText({
+    records <- read.csv("new_records.csv")
+    CountCustomers <- nrow(records)
+    paste("Total amount of customer predictions:", CountCustomers)
+  })
+  
+  #Output eligible new records
+  output$txtEligibleNewRecords <- renderText({
+    records <- read.csv("new_records.csv")
+    EligibleCustomers <- nrow(records[records$Eligible == "Eligible", ])
+    paste("Total amount of customers that are eligible:", EligibleCustomers)
+  })
+  
+  #Output non-eligible new records
+  output$txtNonEligibleNewRecords <- renderText({
+    records <- read.csv("new_records.csv")
+    NonEligibleCustomers <- nrow(records[records$Eligible == "Not Eligible", ])
+    paste("Total amount of customers that are not eligible:", NonEligibleCustomers)
+  })
+  
+  #Output non-eligible new records
+  output$txtPercentageEligibleNewRecords <- renderText({
+    records <- read.csv("new_records.csv")
+    CountCustomers <- nrow(records)
+    EligibleCustomers <- nrow(records[records$Eligible == "Eligible", ])
+    PercentageNewEligibleCustomers <- round(EligibleCustomers / CountCustomers * 100, 2)
+    paste("Total amount of customers that are not eligible:", PercentageNewEligibleCustomers, " %")
   })
   
   #Output feature importance plot
