@@ -127,6 +127,16 @@ ui <- fluidPage(
              actionButton("bulkSubmit", "Submit"),
              DT::dataTableOutput("table")
     ),
+    tabPanel("View Records", 
+             h1("All Processed Records"),
+             actionButton("allView", "View all Records"),
+             DT::dataTableOutput("RecordsTable"),
+             h2("New Records"),
+             textOutput("txtTotalNewRecords"),
+             textOutput("txtEligibleNewRecords"),
+             textOutput("txtNonEligibleNewRecords"),
+             textOutput("txtPercentageEligibleNewRecords"),
+    ),
     tabPanel("Model Accuracy Metrics", 
              h1("Model Accuracy Metrics"),
              textOutput("txtAccuracy"),
@@ -137,13 +147,7 @@ ui <- fluidPage(
              textOutput("txtImproved"),
              textOutput("txtIncrease"),
              h2("Feature Importance"),
-             plotOutput("txtPlot"),
-             h2("New Records"),
-             textOutput("txtTotalNewRecords"),
-             textOutput("txtEligibleNewRecords"),
-             textOutput("txtNonEligibleNewRecords"),
-             textOutput("txtPercentageEligibleNewRecords"),
-             
+             plotOutput("txtPlot")
     ),
     tabPanel("Development Team", 
              h1("Development Team"),
@@ -309,6 +313,13 @@ server <- function(input, output) {
   output$table <- DT::renderDataTable({
     req(input_file())
     input_file()
+  })
+  
+  # Display all new records
+  output$RecordsTable <- DT::renderDataTable({
+    req(input$allView)
+    data <- read.csv("new_records.csv")
+    data
   })
   
   #################################################################
