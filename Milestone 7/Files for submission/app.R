@@ -270,7 +270,12 @@ server <- function(input, output) {
       predVal <- ifelse(pred == "0.743001202264081", "Eligible", "Not Eligible")
       
       # Add the prediction to the new record
-      new_record$Prediction <- predVal
+      new_record$Eligible <- predVal
+      
+      new_record <- new_record %>% select(-Column1, -Middle.Initial,
+                                          -street_address, -postal_code, -city,
+                                          -State, -Province, -phone_number, 
+                                          -email)
       
       return(new_record)
     })
@@ -291,6 +296,12 @@ server <- function(input, output) {
     
     # Process and predict for bulk data
     bulk_predictions <- bulk_preprocess_and_predict(data)
+    
+    # for (i in nrow(bulk_predictions)) {
+    #   append_new_record(bulk_predictions[i, ])
+    # }
+    append_new_record(bulk_predictions)
+    
     return(bulk_predictions)
   })
   
