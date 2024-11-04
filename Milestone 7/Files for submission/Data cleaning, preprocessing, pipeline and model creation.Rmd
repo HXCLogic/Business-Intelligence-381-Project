@@ -15,6 +15,8 @@ library(caret)
 library(randomForest)
 ```
 
+Create the function "Mode" to retrieve the mode value from the "marital_status" attribute
+
 ```{r}
 # Define the Mode function
 Mode <- function(x) {
@@ -23,7 +25,7 @@ Mode <- function(x) {
 }
 ```
 
-# Load dataset (CustData2.csv)
+# Load the dataset
 
 ```{r}
 # Read 'CustData2.csv' file into data frame 'customers'
@@ -44,6 +46,8 @@ eligiblePercantageOriginal <- (numEligibleOriginal /
 cat("Percentage of Eligible Customers in baseline model: ", 
     round(eligiblePercantageOriginal, 2))
 ```
+
+## Frequency encoded attributes
 
 ```{r}
 # Calculate frequency tables with column names aligned to match new_record
