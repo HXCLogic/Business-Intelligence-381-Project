@@ -1,0 +1,9 @@
+Please run the files in the following order:
+
+1. Data cleaning, preprocessing, pipeline and model creation.Rmd
+
+2. Making predictions with model and pipeline.Rmd (Optional)
+
+3. app.R
+
+Thank you!
